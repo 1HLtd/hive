@@ -1,0 +1,79 @@
+  What is chroot?
+
+Chroot is short for change root. The idea is to change the root directory from / to a directory down the tree.
+Examples
+
+/ - your current root directory
+
+mount /dev/sdb1 /mnt (mount your USB disk to /mnt)
+chroot /mnt 
+
+now your root directory is no longer / but /mnt
+this means that when you type cd / you will still see the contents of /mnt instead of /
+
+	The shell
+
+In order to change the root folder to a new directory, you have to have a shell (bash or sh) in the /bin directory inside the chroot. If you have compiled the bash with dynamic linked libraries you have to have the required libraries in the chrooted directory as well.
+
+If you don't have a shell or the shell you have copied is unable to run, you will not be able to change the root dir to the new one.
+
+Note: this is true only if you wish to chroot with the system command chroot otherwise with the C standard chroot function you can simply ignore the shell and chroot the application wherever you want without shell inside of it.
+Security
+
+As the default chroot command can be used to change the root directory to an inner directory of the tree, it also can be used to get to outer parts of the tree:
+
+chroot ../../../
+
+There is a very wrong assumption that if you remove the chroot command from the chrooted directory you will not be able to exit the chroot. An attacker can always upload a chroot command and use it to get out of the chroot. However, the user has to have CAP_SYS_CHROOT capability to be able to chroot to any directory.
+
+
+If your kernels are with the GRSecurity patch, the situation is quite different. The system call chroot can only be used to go deeper in the tree and so you can't escape the chroot jail.
+
+
+One other thing are hardlinks. Even if you are in the chrooted directory, you can access directories that are outside the chroot if they are hardlinked to the place where you are chrooted. You have to make sure that there are no hardlinks to directories or applications which reside outside the chrooted folder.
+
+
+And finally, you must make sure that users executing an application within the chroot can not create device files. Because if they can, they can simply create a device file pointing to the device which is holding your OS or home folders (for example: /dev/sda1) and by doing so, they can bypass the chroot protection.
+
+The best way of securing a chroot is by creating a separate partition.
+
+	What we currently have?
+
+We have one folder /var/suexec which is used to foster all chrooted users.
+
+In this folder we have one special folder /var/suexec/baseos. In this directory we have a basic OS:
+
+/var/suexec/baseos
+                 |- bin/
+                 |- dev/
+                 |- etc/
+                 |- home/
+
+We have a folder for each user on the machine. And in those folders we mount the base OS:
+
+/var/suexec/baseos
+                  |--> /var/suexec/user1
+                  |--> /var/suexec/user2
+                  |--> /var/suexec/user3
+
+This way we share the baseos between the users on the machine but they don't share the Host OS. In this way, they are separated from the host OS. Also, because of this separation no user can see the files of any other user.
+How we achieved this?
+
+First, the baseos is bind mounted to each user folder:
+
+/var/suexec/baseos
+                  |--> /var/suexec/user1
+                  |--> /var/suexec/user2
+                  |--> /var/suexec/user3
+
+Then each user's home folder is bind mounted into the chrooted dir:
+
+/home/user1 --> /var/suexec/user1/home/user1
+
+The first bind mount creates the base directory structure in the /var/suexec/userX directory. And the second bind mount brings the user's files into the chroot.
+
+
+The system (either suexec or cron) first checks if there is a folder in /var/suexec for the current user. If there is not, it creates the folder (/var/suexec/userX). Then it mounts the baseos. And after that it checks if in the baseos we have a folder with the username. Again, if the folder does not exist, it is created (/var/suexec/userX/home/userX). And finally, the home folder of the user is mounted to /var/suexec/userX/home/userX.
+
+After the first mount both suexec and cron don't repeat these mounts, they only check them. If a mount disappears, it is created again. 
+

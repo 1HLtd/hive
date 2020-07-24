@@ -1,0 +1,235 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=windows-1251">
+<title>mod_hive - Apache HTTP Server</title>
+<link href="css/manual.css" rel="stylesheet" media="all" type="text/css" title="Main stylesheet">
+<link href="css/manual-loose-100pc.css" rel="alternate stylesheet" media="all" type="text/css" title="No Sidebar - Default font size">
+<link href="css/manual-print.css" rel="stylesheet" media="print" type="text/css">
+<link href="images/favicon.ico" rel="shortcut icon"></head>
+<body>
+<div id="page-header">
+<p class="menu"><a href="/manual/en/mod/index.html"><br>
+</a><a href="/manual/en/sitemap.html"></a></p>
+<p class="apache">A Module for Apache Version 2.2 or later</p>
+</div>
+<div id="path">
+<br>
+</div>
+<div id="page-content">
+<div id="preamble"><h1>Apache Module mod_hive</h1>
+<div class="toplang">
+<p><span>Available Languages: </span><a href="#" title="English">&nbsp;en&nbsp;</a></p>
+</div>
+<table class="module"><tbody><tr><th><a href="/manual/en/mod/module-dict.html#Description">Description:</a></th>
+<td>Apache module that enables account isolation, resource limits, multiple PHP version support and usage statistics (CPU, IO, Memory)
+<br></td></tr>
+<tr><th><a href="/manual/en/mod/module-dict.html#Status">Status:</a></th><td>Extension</td></tr>
+<tr><th><a href="/manual/en/mod/module-dict.html#ModuleIdentifier">Module&nbsp;Identifier:</a></th><td>hive_module</td></tr>
+<tr><th><a href="/manual/en/mod/module-dict.html#SourceFile">Source&nbsp;File:</a></th><td>mod_hive.c</td></tr>
+<tr><th><a href="/manual/en/mod/module-dict.html#Compatibility">Compatibility:</a></th><td>Version 2.2 and later</td></tr></tbody></table>
+<h3>Summary</h3>
+<p><code class="module"><span style="text-decoration: underline;">mod_hive</span></code>
+aims to provide support for:
+    <li>Script execution isolation using chroot for better security</li>
+    <li>Multiple php version support (globally and/or per vhost)</li>
+    <li>Resource usage limits</li>
+    <li>Resource usage statistics (CPU, I/O, Memory)</li>
+<br />
+<br />
+
+<p> 
+
+    It also adds several different options to AddHandler and AddType.
+    <br>
+    These are the list of  options which control the default PHP version that would be serving all PHP files:
+    <br>
+    <li> Use application/x-httpd-recommended-php       to use the version specified by the RecommendedPHP directive</li>
+    <li> Use application/x-httpd-php4                              For PHP 4.4.x </li>
+    <li> Use application/x-httpd-php5                              For PHP 5.0.x </li>
+    <li> Use application/x-httpd-php51                             For PHP 5.1.x </li>
+    <li> Use application/x-httpd-php52                             For PHP 5.2.x </li>
+    <li> Use application/x-httpd-php52s                            For PHP 5.2.17-suhosin</li>
+    <li> Use application/x-httpd-php53                             For PHP 5.3.x </li>
+    <li> Use application/x-httpd-php54                             For PHP 5.4.x </li>
+    <li> Use application/x-httpd-php55                             For PHP 5.5.x </li>
+    <li> Use application/x-httpd-php56                             For PHP 5.6.x </li>
+    <li> Use application/x-httpd-php57                             For PHP 5.7.x </li>
+    <li> Use application/x-httpd-php70                             For PHP 7.0.x </li>
+    <li> Use application/x-httpd-php71                             For PHP 7.1.x </li>
+    <li> Use application/x-httpd-php72                             For PHP 7.2.x </li>
+    
+    <br/>Different handlers can be applied inside each client's virtual host.
+    <br/>Clients can also define their own custom handler (different PHP version) by setting the appropriate handler 
+    <br/>in the .htaccess file under the directory where they would like to use different PHP version.
+    
+    <br/>If there is no NUMBER set after x-httpd-php this means that the default PHP version for processing php scripts will be the same as
+    <br/>the one shown when executing this on the command line:
+    <br/>chroot /var/suexec/baseos php -v
+    <br/>Usually this version is the same as the one which was used on the server prior installing Hive.
+    
+</p>
+</p>
+</div>
+<br>
+
+<div id="quickview">
+  <h3>Directives</h3>
+  <ul id="topics">
+  <li><img alt="" src="images/down.gif" /> <a href="#recommendedphp">RecommendedPHP</a></li>
+  <li><img alt="" src="images/down.gif" /> <a href="#relaxperms">RelaxPerms</a></li>
+  <li><img alt="" src="images/down.gif" /> <a href="#maxloadlimit">MaxLoadLimit</a></li>
+  <li><img alt="" src="images/down.gif" /> <a href="#disablechroot">DisableChroot</a></li>
+  <li><img alt="" src="images/down.gif" /> <a href="#disablelimits">DisableLimits</a></li>
+  <li><img alt="" src="images/down.gif" /> <a href="#disablestats">DisableStats</a></li>
+  <li><img alt="" src="images/down.gif" /> <a href="#disablesymlinkprotection">DisableSymlinkProtection</a></li>
+  </ul>
+</div>
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="recommendedphp" id="recommendedphp">RecommendedPHP Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> defines which php version to be used when applicaton/x-httpd-recommended-php handler is used.</td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>RecommendedPHP <var>string (path to php executable)</var></code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config</td></tr>
+<tr><th><a href="directive-dict.html#Default">Default:</a></th><td>/usr/local/php71/bin/php</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p>defines which php version to be used when applicaton/x-httpd-recommended-php handler is used.
+    <div class="example"><h3>Examples</h3><p><code>
+      RecommendedPHP /usr/local/php70/bin/php<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="maxloadlimit" id="maxloadlimit">MaxLoadLimit Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> defines maximum load before Hive refuses to process new requests for PHP and CGI scripts</td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>MaxLoadLimit <var>float (number)</var></code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config</td></tr>
+<tr><th><a href="directive-dict.html#Default">Default:</a></th><td>If MaxLoadLimit is not defined the default value is set to 20.0</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p> defines maximum load before Hive refuses to process new requests for PHP and CGI scripts
+    <div class="example"><h3>Examples</h3><p><code>
+      MaxLoadLimit 29.0<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="relaxperms" id="relaxperms">RelaxPerms Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> allows execution PHP, CGI, .pl and other CGI scripts even if Options -ExecCGI is set to off  </td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>RelaxPerms</code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p>allows execution PHP, CGI, .pl and other CGI scripts even if Options -ExecCGI is set to off
+    <div class="example"><h3>Examples</h3><p><code>
+      RelaxPerms<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="disablechroot" id="disablechroot">DisableChroot Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> disable chrooting of executed scripts globally. If not defined all scripts are chrooted </td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>DisableChroot</code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config,vhost</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p>disable chrooting of executed scripts globally. If not defined all scripts are chrooted
+    <div class="example"><h3>Examples</h3><p><code>
+      DisableChroot<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="disablelimits" id="disablelimits">DisableLimits Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> turn off resource limitations of the executed scripts. If not defined limits are turned on</td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>DisableLimits</code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config,vhost</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p>turn off resource limitations of the executed scripts. If not defined limits are turned on
+    <div class="example"><h3>Examples</h3><p><code>
+      DisableLimits<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="disablestats" id="disablestats">DisableStats Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> turn off CPU, Memory and I/O statistics of the executed scripts. If not defined statistics are turned on</td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>DisableStats</code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config,vhost</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p>turn off CPU, Memory and I/O statistics of the executed scripts. If not defined statistics are turned on
+    <div class="example"><h3>Examples</h3><p><code>
+      DisableStats<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+<div class="directive-section"><h2><a name="disablesymlinkprotection" id="disablesymlinkprotection">DisableSymlinkProtection Directive</a></h2>
+<table class="directive">
+<tr><th><a href="directive-dict.html#Description">Description:</a></th><td> turn off Apache symlink protection</td></tr>
+<tr><th><a href="directive-dict.html#Syntax">Syntax:</a></th><td><code>DisableSymlinkProtection</code></td></tr>
+<tr><th><a href="directive-dict.html#Context">Context:</a></th><td>server config,vhost</td></tr>
+<tr><th><a href="directive-dict.html#Status">Status:</a></th><td>Base</td></tr>
+<tr><th><a href="directive-dict.html#Module">Module:</a></th><td>mod_hive</td></tr>
+<tr><th><a href="directive-dict.html#Compatibility">Compatibility:</a></th><td>Apache 2.2 and later</td></tr>
+
+</table>
+    <p>turn off Apache symlink protection.
+    <div class="example"><h3>Examples</h3><p><code>
+      DisableSymlinkProtection<br />
+      <br />
+    </code></p></div>
+
+</div>
+
+
+<div class="top"><a href="#page-header"><img alt="top" src="images/up.gif" /></a></div>
+
+
+<div class="bottomlang"><p><span>Available Languages: </span><a href="#" title="English">&nbsp;en&nbsp;</a></p>
+</div>
+<div id="footer">
+<p class="apache">Copyright 2010-2019 Marian Marinov &lt;mm@yuhu.biz&gt;.<br>
+</p>
+</div>
+</div></body></html>

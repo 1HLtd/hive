@@ -1,0 +1,18 @@
+#username:mem:cputime:numprocs:max_file_size:max_files
+#use 00 as username to change the default limits
+
+#Example default limits line
+# - 256 MB memory limit
+# - 120 cpu seconds
+# - 40 maximum number of processes
+# - 2GB maximum size of file which can be opened
+# - 30 maximum number of files which can be opened at once
+# 00:262144000:120:40:2000000000:30
+
+#Example limit line for userX
+# 128MB memory limit
+# 60 seconds cpu time
+# 20 maximum number of processes userX can spawn
+# 1GB maximum size of file which userX can open
+# 15 maximum number of files which userX can open at once
+# userX:134217728:60:20:1000000000:15

@@ -1,0 +1,157 @@
+#!/bin/bash
+#chkconfig: 2345 80 10
+#description: 1H Hive SuEXEC startup script
+
+VERSION='3.4.1'
+chroot='/var/suexec'
+baseos='/var/suexec/baseos'
+hive_conf='/usr/local/1h/etc/hive.conf'
+
+# By default baseos will be loaded in the memory
+use_mem=1
+if [ -f $hive_conf ]; then
+	. $hive_conf
+fi
+
+function clean_mounts() {
+	echo "Cleaning the mounts"
+	rm -f /tmp/mounts-cleaner
+	touch /tmp/mounts-cleaner && chmod 600 /tmp/mounts-cleaner
+	awk '/suexec/{ if ($2 !~ /\/var\/suexec\/baseos/) print $2}' /proc/mounts > /tmp/mounts-cleaner
+	for mnt in `perl -e 'open M, "<", "/tmp/mounts-cleaner"; @f=<M>; close M; for ( $i=$#f; $i >=0; $i-- ) { $f[$i] =~ s/\\\040.*// if ($f[$i] =~ /\\\/); print $f[$i]; }'`; do
+		umount -l $mnt;
+	done
+	awk '/suexec/{ if ($2 !~ /\/var\/suexec\/baseos/) print $2}' /proc/mounts > /tmp/mounts-cleaner
+	for mnt in `perl -e 'open M, "<", "/tmp/mounts-cleaner"; @f=<M>; close M; for ( $i=$#f; $i >=0; $i-- ) { $f[$i] =~ s/\\\040.*// if ($f[$i] =~ /\\\/); print $f[$i]; }'`; do
+		umount -l $mnt;
+	done
+	rm -f /tmp/mounts-cleaner
+}
+
+function clean_usermounts() {
+	if [ "$1" == 'baseos' ]; then
+		echo "You can not umount the BaseOS!"
+		exit;
+	fi
+	echo "Cleaning the mounts for user: $1"
+	rm -f /tmp/mounts-cleaner
+	touch /tmp/mounts-cleaner && chmod 600 /tmp/mounts-cleaner
+    awk "/$1/{ print \$2 }" /proc/mounts > /tmp/mounts-cleaner
+	for mnt in `perl -e 'open M, "<", "/tmp/mounts-cleaner"; @f=<M>; close M; for ( $i=$#f; $i >=0; $i-- ) { $f[$i] =~ s/\\\040.*// if ($f[$i] =~ /\\\/); print $f[$i]; }'`; do
+		umount -l $mnt;
+	done
+	rm -f /tmp/mounts-cleaner
+}
+
+function bind_mount() {
+    echo "Mounting $1 to $2"
+	if ( grep $2 /proc/mounts ); then
+		echo "$2 already mounted"
+	else
+		if [ ! -d $2 ]; then
+			echo "Mount point $2 is not existing! Creating it!..."
+			mkdir -p $2
+		fi
+    	logger "Mounting $1 to $2"
+    	mount --bind $1 $2
+	fi
+}
+
+function rbind_mount() {
+    echo "Rbind Mounting $1 to $2"
+	if ( grep $2 /proc/mounts ); then
+		echo "$2 already mounted"
+	else
+		if [ ! -d $2 ]; then
+			echo "Mount point $2 is not existing! Creating it!..."
+			mkdir -p $2
+		fi
+    	logger "Mounting $1 to $2"
+    	mount --rbind $1 $2
+	fi
+}
+
+function init_chroot() {
+	# create base dirs
+	if [ ! -d $chroot ]; then
+        echo "No chroot directory found, creating new!"
+        mkdir -p $chroot
+        chmod 711 $chroot
+	fi
+	if [ ! -d $baseos ]; then
+        echo "No BaseOS directory found, creating new!"
+        mkdir -p $baseos
+		chmod 755 $baseos
+	fi
+
+	# Check/fix fstab only in case use_mem is == 1
+	if [ "$use_mem" == "1" ]; then
+		# checking fstab
+		if ( ! grep baseos /etc/fstab > /dev/null ); then
+	        echo "No entry for $baseos in /etc/fstab"
+	        echo -e "none\t$baseos\ttmpfs\tsize=400m\t0 0" >> /etc/fstab
+		fi
+
+		# mount tmpfs
+		if ( grep baseos /proc/mounts > /dev/null ); then
+	        echo "$baseos already mounted"
+		else
+	        echo "Mounting $baseos"
+	        mount $baseos
+		fi
+	fi
+
+	# copy the BaseOS to $baseos
+	if [ -d $baseos/Z ]; then
+        echo "$baseos already copied"
+	else
+        cp -a /root/baseos/* $baseos
+		if [ -d $baseos/Z ]; then
+			echo "BaseOS copied to $baseos"
+		else
+			echo "The copy of BaseOS in $baseos is incomplete"
+		fi
+	fi
+
+	## Prepare etc
+	echo "Copying the /etc files to the baseos"
+	files='passwd group resolv.conf hosts'
+	for file in $files; do
+	    if [ -f $baseos/etc/$file ]; then
+	        rm -f $baseos/etc/$file
+	    fi
+	    cp /etc/$file $baseos/etc/
+	done
+	## mount any additional dirs
+
+	# mount tmp into the baseos
+	bind_mount /tmp /chroot/tmp
+
+	# mount the chroot folder to the /var/suexec/baseos
+	rbind_mount /chroot /var/suexec/baseos/chroot
+	
+	# remount the directory with the right permissions
+	# we need that because tmpfs is changing the permissions to 1777
+	chmod 0755 $baseos
+}
+
+case "$1" in
+	'init')
+		init_chroot
+	;;
+	'start')
+		init_chroot
+	;;
+	'stop')
+		echo "Suexec-chroot doesn't need to be stopped!"
+		exit
+	;;
+	'clean')
+		clean_mounts
+	;;
+	'cleanuser')
+		clean_usermounts $2
+	;;
+	*)
+		echo "Usage: $0 start | stop | cleanuser username | clean"
+esac

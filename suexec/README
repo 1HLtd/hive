@@ -1,0 +1,165 @@
+	Basics
+
+There are three ways you can execute a script from Apache Web Server:
+
+   1. With a built-in module like mod_php, mod_perl, mod_python, etc.
+   2. By executing the script directly with mod_cgi
+   3. Executing the script through mod_cgi but using a wrapper application - SuExec 
+
+So SuExec was developed to address one of the main security issues that Apache Web server had at that time - all scripts were run by the same user.
+
+	How it works?
+
+SuExec is a Set Uid Root binary. What this means is that every time it is executed, the system runs this program with root privileges.
+
+So SuExec does several checks before executing a script. A few of those are:
+
+    * check if the user which has to execute the script is a valid system user
+    * check if the file is not world writable
+    * check if the directory is owned by the same user
+    * check if the file is owned by the same user
+    * and some more checks that we will not discuss here... 
+
+After all of these checks have finished successfully, SuExec changes its User ID (UID) from root (0) to the UID with which it has to run the script and runs it. Before the actual run of the script, SuExec logs the execution to suexec.log (if not changed during build).
+What our modifications add?
+Chroot
+
+The normal suexec adds decent security by running all scripts with user privileges but this doesn't protect world writable directories and files. Also world readable files are open to all users, so you can't protect your user's data from leaking to other users on the machine.
+
+We worked to solve these issues and add a separation between users.
+
+So what we did was to add chroot support to SuExec. What this means is that a user can see only its own files and the programs from the BaseOS. The user is insulated from everyone else on the machine.
+
+More about the chroot structure and mechanism can be found in the document Chrooting.
+
+	Limits
+
+Every time a user runs a script on the server, its script can use as much resources as its parent process can, this is simply how processes work on Linux. But Linux gives us a way of controlling the resource allocation of each process, the parent process only has to set a new limit before starting the new process. So, since all user scripts are executed by SuExec, we decided to implement these resource limitations in it.
+
+We have currently implemented the following resource limits:
+
+    * CPU time limitations (RLIMIT_CPU)
+    * Maximum memory allocation by a process (RLIMIT_AS)
+    * Maximum size of files that a process may create (RLIMIT_FSIZE)
+    * Maximum number of files that a process may open (RLIMIT_NOFILE)
+    * Maximum number of processes that a user may have in any single time on the system (RLIMIT_NPROC) 
+
+If you want more information about these limits please refer to the getrlimit man page on your Linux machine:
+
+man getrlimit
+
+	Statistics
+
+In Linux it is possible to collect resource statistics from each child process. We decided to use this functionality to collect CPU usage statistics from all processes started by suexec.
+
+So now before every execution, suexec logs it, but after that, it logs the resources used by the process. This way we have information about every process executed on the machine and we simply have to read the logs and calculate the statistics.
+
+	Configuration
+
+Our SuExec offers configuration for the limits it imposes for every process. You can either change the global values or on a per-user basis.
+
+The configuration file is /usr/local/apache/conf/rlimit-config
+
+Its syntax is very simple:
+
+username:memlimit:cpulimit:numproc:filesize:ofiles
+username - the username for which these limits will apply
+memlimit - RLIMIT_AS
+cpulimit - RLIMIT_CPU
+numporoc - RLIMIT_NPROC
+filesize - RLIMIT_FSIZE
+ofiles   - RLIMIT_NOFILE
+
+Here is an exemplary custom limits entry for user joyme:
+
+joyme:50000000:120:20:200000000:40
+
+So processes of user joyme will have the following limitations:
+
+   1. Maximum 50MB of memory
+   2. Maximum of 120 CPU ticks (do not mistake a CPU tick with an actual second, it is not)
+   3. Maximum of 20 simultaneous processes at any given time
+   4. The biggest file it can create or read will be 200MB
+   5. The maximum number of files it can open simultaneously will be 40 
+
+If a username is not found in the rlimit-config the Default limits are applied to its processes. The default limits can be seen using suexec -V:
+
+# /usr/local/apache/bin/suexec -V
+ -D LOG_EXEC="/usr/local/apache/logs/suexec_log"
+ -D DOC_ROOT="/usr/local/apache/htdocs"
+ -D SAFE_PATH="/usr/bin:/bin"
+ -D HTTPD_USER="nobody"
+ -D UID_MIN=100
+ -D GID_MIN=99
+ -D SUEXEC_CHROOT, CHROOT_DIR=/var/suexec/, BASE_OS=/var/suexec/baseos, HOME_PATH=/home/
+ -D SUEXEC_TRUSTED_USER=0
+ -D SUEXEC_TRUSTED_GROUP=10
+ -D USERDIR_SUFFIX="public_html"
+ -D INCLUDEPHP
+ -D INCLUDELIMITS
+        LIMITS_CONF="/usr/local/apache/conf/rlimit-config"
+        MAX_CPUTIME=120
+        MAX_MEMLIMIT=920000000
+        MAX_NUMPROC=40
+        MAX_FSIZE=2000000000
+        MAX_OFILE=30
+ -D INCLUDESTATS
+ -D HAVECGIDIR
+ -D STDEXEC
+VERSION: 0.1.7
+
+You can change the default limits by using a magic username in the rlimit-config. If you have a line with username 00 in the configuration file, those limits will be used instead of the default if a username is not found in the file.
+Error codes
+
+*  Sev     Meaning
+* emerg:  Failure of some basic system function
+* alert:  Bug in the way Apache is communicating with suexec
+* crit:   Basic information is missing, invalid, or incorrect
+* error:  Script permission/configuration error
+* warn:   
+* notice: Some issue which the sysadmin/webmaster should be aware of
+* info:   Normal activity message
+* debug:  Self-explanatory
+
+    * 0 - Success
+    * 1 - General error
+    * 100 - crit: failed to open log file
+    * 101 - emerg: failed to malloc memory for environment
+    * 102 - crit: unable to stat php handler %s: %s\n", strerror(errno)
+    * 103 - crit: invalid uid: (%ld)\n", uid
+    * 104 - alert: too few arguments
+    * 105 - alert: calling user mismatch (%s instead of %s)\n", pw->pw_name, HTTPD_USER
+    * 106 - error: invalid command (%s)\n", cmd
+    * 107 - crit: invalid target user name: (%s)\n", target_uname
+    * 108 - crit: malloc failed
+    * 109 - crit: invalid target group name: (%s)\n", target_gname
+    * 110 - crit: memory allocation failed (%i bytes)\n", buf_size
+    * 111 - crit: failed to duplicate PATH_TRANSLATED
+    * 112 - error: script not within home dir (script=%s, home=%s)\n", sanitised_current_path, target_homedir
+    * 113 - crit: unable to create %s, error: %s\n", chroot_path, strerror(errno)
+    * 114 - crit: mount error: Source: %s Destination: %s ERROR: %s\n", BASE_OS, chroot_path, strerror(errno)
+    * 115 - crit: mount error: Source: %s Destination: %s ERROR: %s\n", BASE_OS, chroot_path, strerror(errno)
+    * 116 - crit: unable to create %s, error: %s\n", chroot_home, strerror(errno)
+    * 117 - crit: mount error: Source: %s Destination: %s ERROR: %s\n", target_homedir, chroot_home, strerror(errno)
+    * 118 - crit: failed to perform chroot to %s (%s)\n", chroot_path, strerror(errno)
+    * 119 - error: sername too long(more then 12 chars)!
+    * 120 - crit: cannot run as forbidden uid (%d/%s)\n", uid, cmd
+    * 121 - crit: cannot run as forbidden gid (%d/%s)\n", gid, cmd
+    * 122 - emerg: failed to setgid (%ld: %s)\n", gid, cmd
+    * 123 - emerg: failed to setuid (%ld: %s) user target/actual: (%s/%s)\n", uid, cmd, target_uname, actual_uname
+    * 124 - emerg: cannot get current working directory
+    * 125 - emerg: cannot get docroot information (%s)\n", target_homedir
+    * 126 - emerg: cannot get docroot information (%s)\n", DOC_ROOT
+    * 127 - error: command not in docroot (%s|%s|%s)\n", cwd, dwd, cmd
+    * 128 - error: cannot stat directory: (%s)\n", cwd
+    * 129 - error: directory is writable by others: (%s)\n", cwd
+    * 130 - error: cannot stat program: (%s)\n", cmd
+    * 131 - error: file is writable by others: (%s/%s)\n", cwd, cmd
+    * 132 - error: file is either setuid or setgid: (%s/%s)\n", cwd, cmd
+    * 133 - error: target uid/gid (%ld/%ld) mismatch with directory (%ld/%ld) or program (%ld/%ld) or trusted user (%d/%d)\n", uid, gid, dir_info.st_uid, dir_info.st_gid, prg_info.st_uid, prg_info.st_gid, atoi(SUEXEC_TRUSTED_USER), atoi(SUEXEC_TRUSTED_GROUP));
+    * 134 - error: target uid/gid (%ld/%ld) mismatch with directory (%ld/%ld) or program (%ld/%ld)\n", uid, gid, dir_info.st_uid, dir_info.st_gid, prg_info.st_uid, prg_info.st_gid
+    * 135 - error: target uid/gid (%ld/%ld) mismatch with cgi-bin directory %s (%ld/%ld)\n", uid, gid, cwd, dir_info.st_uid, dir_info.st_gid
+    * 136 - error: target uid/gid (%ld/%ld) mismatch with directory (%ld/%ld) or program (%ld/%ld) or trusted user (%d/%d)\n", uid, gid, dir_info.st_uid, dir_info.st_gid, prg_info.st_uid, prg_info.st_gid, atoi(SUEXEC_TRUSTED_USER), atoi(SUEXEC_TRUSTED_GROUP)
+    * 137 - error: target uid/gid (%ld/%ld) mismatch with directory (%ld/%ld) or program (%ld/%ld)\n", uid, gid, dir_info.st_uid, dir_info.st_gid, prg_info.st_uid, prg_info.st_gid
+    * 138 - error: file has no execute permission: (%s/%s)\n
+    * 139 - child exit 
